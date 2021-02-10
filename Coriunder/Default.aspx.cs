@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -15,7 +16,26 @@ namespace Coriunder
     {
         protected void Page_Load(object sender, EventArgs e)
         {
+            FillsMonthDropDown();
             FillCountryDdl();
+            FillYearsDropDown();
+        }
+
+        private void FillYearsDropDown()
+        {
+            ddlExpYear.Items.Add(new ListItem("2021"));
+            ddlExpYear.Items.Add(new ListItem("2022"));
+            ddlExpYear.Items.Add(new ListItem("2023"));
+            ddlExpYear.Items.Add(new ListItem("2024"));
+        }
+
+        private void FillsMonthDropDown()
+        {
+            var months = CultureInfo.CurrentCulture.DateTimeFormat.MonthNames;
+            for (int i = 0; i < months.Length; i++)
+            {
+                ddlExpMonth.Items.Add(new ListItem(months[i], i.ToString()));
+            }
         }
 
         private void FillCountryDdl()
@@ -91,42 +111,48 @@ namespace Coriunder
 
         private void SilentPostCharge(TransactionsData data)
         {
-           
+            string refTransID = "1234";
+
             //------------- building url string to send
             String sendStr;
             sendStr = "https://process.coriunder.cloud/member/remote_charge.asp?";
             sendStr += "CompanyNum=" + HttpUtility.UrlEncode(data.CompanyNumber) + "&";
-            sendStr += "TransType=" + HttpUtility.UrlEncode(Convert.ToInt32(TransactionType.ChargeCC).ToString()) + "&";
-            sendStr += "CardNum="   + HttpUtility.UrlEncode(data.CardNumber);
-            sendStr += "ExpMonth="  + HttpUtility.UrlEncode(data.Month.ToString());
-            sendStr += "ExpYear="   + HttpUtility.UrlEncode(data.Year.ToString());
-            sendStr += "Member="    + HttpUtility.UrlEncode(data.CardHolderName.ToString());
-            sendStr += "TypeCredit=" + HttpUtility.UrlEncode(TypeCredit.Refund.ToString());
-            sendStr += "Payments=" + HttpUtility.UrlEncode("1");            // 1 - for regular transaction
-            sendStr += "Amount=" + HttpUtility.UrlEncode(data.Amount.ToString());
-            sendStr += "Currency=" + HttpUtility.UrlEncode(data.Currency.ToString());
-            sendStr += "CVV2=" + HttpUtility.UrlEncode(data.Cvv.ToString());
-            sendStr += "Email=" + HttpUtility.UrlEncode(data.Email);
-            sendStr += "PhoneNumber=" + HttpUtility.UrlEncode(data.Phone);
-            string ipAddress = GetIPAddress();
-            sendStr += "BillingAddress1=" + HttpUtility.UrlEncode(data.BillingAddress);
-            sendStr += "BillingCity=" + HttpUtility.UrlEncode(data.City);
-            sendStr += "BillingZipCode=" + HttpUtility.UrlEncode(data.ZipCode);
-            sendStr += "BillingCountry=" + HttpUtility.UrlEncode(data.CountryCode);
+            //sendStr += "TransType=" + HttpUtility.UrlEncode(Convert.ToInt32(TransactionType.ChargeCC).ToString()) + "&";
+            sendStr += "TransType=" + HttpUtility.UrlEncode(Convert.ToInt32(TransactionType.Debit).ToString()) + "&";
+            sendStr += "TransApprovalID=" + HttpUtility.UrlEncode(refTransID) + "&";
 
-            string refTransID = "1234";
-            //Signature for verifying the authenticity of the request parameters.
-            //Field values to use: CompanyNum + TransType + TypeCredit + Amount + Currency + CardNum + RefTransID + PersonalHashKey
-            //Refer to BASIC INFO SIGNATURE for detailed explanation.
-            //"1234567" + "1" + "1" + "5.4" + "1" + "4580000000000000" + "1234" + "AU7E468HNF"
+            sendStr += "CardNum="   + HttpUtility.UrlEncode(data.CardNumber) + "&";
+            sendStr += "ExpMonth="  + HttpUtility.UrlEncode(data.Month.ToString()) + "&";
+            sendStr += "ExpYear="   + HttpUtility.UrlEncode(data.Year.ToString()) + "&";
+            sendStr += "Member="    + HttpUtility.UrlEncode(data.CardHolderName.ToString()) + "&";
+            //sendStr += "TypeCredit=" + HttpUtility.UrlEncode(((int)TypeCredit.Refund).ToString()) + "&";
+            sendStr += "TypeCredit=" + HttpUtility.UrlEncode(((int)TypeCredit.Installments).ToString()) + "&";
+            sendStr += "RefTransID=" + HttpUtility.UrlEncode(refTransID) + "&";
+            sendStr += "Payments=" + HttpUtility.UrlEncode("1") + "&";            // 1 - for regular transaction
+            sendStr += "Amount=" + HttpUtility.UrlEncode(data.Amount.ToString()) + "&";
+            sendStr += "Currency=" + HttpUtility.UrlEncode(data.Currency.ToString()) + "&";
+            sendStr += "CVV2=" + HttpUtility.UrlEncode(data.Cvv.ToString()) + "&";
+            sendStr += "Email=" + HttpUtility.UrlEncode(data.Email) + "&";
+            sendStr += "PhoneNumber=" + HttpUtility.UrlEncode(data.Phone) + "&";
+
+            string ipAddress = GetIPAddress();
+            ipAddress = " 192.168.1.12";
+            sendStr += "ClientIP=" + HttpUtility.UrlEncode(ipAddress) + "&";
+            
+            sendStr += "BillingAddress1=" + HttpUtility.UrlEncode(data.BillingAddress) + "&";
+            sendStr += "BillingCity=" + HttpUtility.UrlEncode(data.City) + "&";
+            sendStr += "BillingZipCode=" + HttpUtility.UrlEncode(data.ZipCode) + "&";
+            sendStr += "BillingCountry=" + HttpUtility.UrlEncode(data.CountryCode) + "&";
 
             //Signature 
-            string signature = data.CompanyNumber + TransactionType.ChargeCC.ToString() + TypeCredit.Refund.ToString() +
+            string signature = data.CompanyNumber + TransactionType.ChargeCC.ToString() + ((int)TypeCredit.Refund).ToString() +
                                data.Amount.ToString() + data.Currency.ToString() + data.CardNumber + refTransID + data.PersonalHashKey;
             string shaSignature = Signature.GenerateSHA256(signature);
             string encodedTo64 = Signature.EncodeTo64(shaSignature);
             sendStr += "Signature=" + HttpUtility.UrlEncode(encodedTo64);
-   
+
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
             //------------- creating the request
             HttpWebRequest webReq = (HttpWebRequest)WebRequest.Create(sendStr);
             webReq.Method = "GET";
@@ -136,6 +162,7 @@ namespace Coriunder
                 HttpWebResponse webRes = (HttpWebResponse)webReq.GetResponse();
                 StreamReader sr = new StreamReader(webRes.GetResponseStream());
                 String resStr = sr.ReadToEnd();
+                TransactionResult transResult = new TransactionResult();
                 Response.Write("Response String: " + resStr + "<br />");
             }
             catch (Exception ex)
@@ -166,6 +193,7 @@ namespace Coriunder
             data.CountryCode = ddlCountry.SelectedValue;
             data.Phone = txtPhone.Text;
             data.Amount = 100;          //Hardcoded for the exam, the value must be transferred from Order details screen
+            data.Currency = "0";          //0 = ILS (Israel New Shekel)
             data.PersonalHashKey = "7ZIQHB7YYN";
             return data;
         }

@@ -7,6 +7,5 @@ namespace Coriunder.Models
         Debit = 1,
         Installments = 8,
         Refund = 0
-       
     }
 }
