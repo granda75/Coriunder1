@@ -1,6 +1,22 @@
-﻿#btnContinue {
-    width: 280px;
-    color:green;
+﻿.btnBackpay {
+    color: white;
+    background-color: #578623;
+    width: 100%;
+ }
+
+#detailsReviewId {
+    color: green;
+    text-align: center;
+}
+#MainContent_btnContinue {
+  
+    margin: auto;
+    color: white;
+    background-color: #578623;
+    display: block;
+   /* margin: 10px 0;
+    padding: 10px;*/
+    width: 100%;
 }
 
 #ordersDetailsId {
@@ -18,13 +34,13 @@
 }
 
 .row {
-   /* margin-top: 30px;*/
+   
     margin-bottom: 15px
 }
 
 /* Move down content because we have a fixed navbar that is 50px tall */
 body {
-    padding-top: 50px;
+    padding-top: 10px;
     padding-bottom: 20px;
 }
 

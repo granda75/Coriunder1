@@ -16,9 +16,13 @@ namespace Coriunder
     {
         protected void Page_Load(object sender, EventArgs e)
         {
-            FillsMonthDropDown();
-            FillCountryDdl();
-            FillYearsDropDown();
+            lblDetailsReview.Visible = false;
+            if (!Page.IsPostBack)
+            {
+                FillsMonthDropDown();
+                FillCountryDropDown();
+                FillYearsDropDown();
+            }
         }
 
         private void FillYearsDropDown()
@@ -38,17 +42,11 @@ namespace Coriunder
             }
         }
 
-        private void FillCountryDdl()
+        private void FillCountryDropDown()
         {
             DataTable dt = new DataTable();
             dt.Columns.Add("Id");
             dt.Columns.Add("Name");
-
-            //IL Israel
-            //RU Russia
-            //AU Australia
-            //AT Austria
-            //DK Denmark
 
             DataRow row = dt.NewRow();
             row["Id"] = "IL";
@@ -114,31 +112,31 @@ namespace Coriunder
             string refTransID = "1234";
 
             //------------- building url string to send
+            //https://process.coriunder.cloud/member/remote_charge.asp?CompanyNum=XXXXXXX&CardNum=4580000000000000&
+            //CVV2=123&ExpMonth=12&ExpYear=2023&Currency=USD&Amount=2.00&Payments=1&TransType=0&ClientIP=1.2.3.4&
+            //TypeCredit=1&Member=Test+Test&Email=email@address.com&Order=ABC123&PayFor=DEMO+PRODUCT&
+            //BillingCity=Jerusalem&BillingCountry=IL&BillingZipCode=12345&PhoneNumber=813012345678&BillingAddress1=165+windlake+cov
+
+            string clientIp = "1.2.3.4";
+            //------------- building url string to send
             String sendStr;
             sendStr = "https://process.coriunder.cloud/member/remote_charge.asp?";
             sendStr += "CompanyNum=" + HttpUtility.UrlEncode(data.CompanyNumber) + "&";
-            //sendStr += "TransType=" + HttpUtility.UrlEncode(Convert.ToInt32(TransactionType.ChargeCC).ToString()) + "&";
             sendStr += "TransType=" + HttpUtility.UrlEncode(Convert.ToInt32(TransactionType.Debit).ToString()) + "&";
-            sendStr += "TransApprovalID=" + HttpUtility.UrlEncode(refTransID) + "&";
-
-            sendStr += "CardNum="   + HttpUtility.UrlEncode(data.CardNumber) + "&";
-            sendStr += "ExpMonth="  + HttpUtility.UrlEncode(data.Month.ToString()) + "&";
-            sendStr += "ExpYear="   + HttpUtility.UrlEncode(data.Year.ToString()) + "&";
-            sendStr += "Member="    + HttpUtility.UrlEncode(data.CardHolderName.ToString()) + "&";
-            //sendStr += "TypeCredit=" + HttpUtility.UrlEncode(((int)TypeCredit.Refund).ToString()) + "&";
-            sendStr += "TypeCredit=" + HttpUtility.UrlEncode(((int)TypeCredit.Installments).ToString()) + "&";
-            sendStr += "RefTransID=" + HttpUtility.UrlEncode(refTransID) + "&";
+            sendStr += "ClientIP=" + HttpUtility.UrlEncode(clientIp) + "&";
+            sendStr += "CardNum=" + HttpUtility.UrlEncode(data.CardNumber) + "&";
+            sendStr += "ExpMonth=" + HttpUtility.UrlEncode(data.Month.ToString()) + "&";
+            sendStr += "ExpYear=" + HttpUtility.UrlEncode(data.Year.ToString()) + "&";
+            sendStr += "Member=" + HttpUtility.UrlEncode(data.CardHolderName.ToString()) + "&";
+            sendStr += "TypeCredit=" + HttpUtility.UrlEncode(Convert.ToInt32(TypeCredit.Debit).ToString()) + "&";
             sendStr += "Payments=" + HttpUtility.UrlEncode("1") + "&";            // 1 - for regular transaction
+
             sendStr += "Amount=" + HttpUtility.UrlEncode(data.Amount.ToString()) + "&";
             sendStr += "Currency=" + HttpUtility.UrlEncode(data.Currency.ToString()) + "&";
             sendStr += "CVV2=" + HttpUtility.UrlEncode(data.Cvv.ToString()) + "&";
             sendStr += "Email=" + HttpUtility.UrlEncode(data.Email) + "&";
             sendStr += "PhoneNumber=" + HttpUtility.UrlEncode(data.Phone) + "&";
-
-            string ipAddress = GetIPAddress();
-            ipAddress = " 192.168.1.12";
-            sendStr += "ClientIP=" + HttpUtility.UrlEncode(ipAddress) + "&";
-            
+                        
             sendStr += "BillingAddress1=" + HttpUtility.UrlEncode(data.BillingAddress) + "&";
             sendStr += "BillingCity=" + HttpUtility.UrlEncode(data.City) + "&";
             sendStr += "BillingZipCode=" + HttpUtility.UrlEncode(data.ZipCode) + "&";
@@ -152,18 +150,39 @@ namespace Coriunder
             sendStr += "Signature=" + HttpUtility.UrlEncode(encodedTo64);
 
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-            //------------- creating the request
             HttpWebRequest webReq = (HttpWebRequest)WebRequest.Create(sendStr);
             webReq.Method = "GET";
-            //------------- checking the response
+           
             try
             {
                 HttpWebResponse webRes = (HttpWebResponse)webReq.GetResponse();
                 StreamReader sr = new StreamReader(webRes.GetResponseStream());
-                String resStr = sr.ReadToEnd();
-                TransactionResult transResult = new TransactionResult();
-                Response.Write("Response String: " + resStr + "<br />");
+                string resStr = sr.ReadToEnd();
+                
+                if (!string.IsNullOrEmpty(resStr))
+                {
+                    TransactionResult transResult = new TransactionResult();
+                    string[] resParts = resStr.Split('&');
+                    if (resParts != null && resParts.Length > 0)
+                    {
+                        string reply = resParts.ToList().Where(l => l.StartsWith("Reply")).Select(l => l).FirstOrDefault();
+                        string[] replyParts = reply.Split('=');
+                        if ( replyParts?.Length > 1 )
+                        {
+                            transResult.Code = replyParts[1];
+                        }
+                        string replyDesc = resParts.ToList().Where(l => l.StartsWith("ReplyDesc")).Select(l => l).FirstOrDefault();
+                        string[] descParts = replyDesc.Split('=');
+                        if (descParts?.Length > 1)
+                        {
+                            transResult.Description = descParts[1];
+                        }
+                    }
+                    Session["TransactionResult"] = transResult;
+                }
+               
+                Response.Redirect("TransResult.aspx");
+               
             }
             catch (Exception ex)
             {
@@ -173,8 +192,24 @@ namespace Coriunder
 
         protected void btnContinue_Click(object sender, EventArgs e)
         {
-            TransactionsData data = FillTransactionsData();
-            SilentPostCharge(data);
+            txtCardholderName.Enabled = false;
+            txtEmail.Enabled = false;
+            txtCardNumber.Enabled = false;
+            ddlExpMonth.Enabled = false;
+            ddlExpYear.Enabled = false;
+            txtCvv.Enabled = false;
+            txtAddress.Enabled = false;
+            txtCity.Enabled = false;
+            txtZipCode.Enabled = false;
+            ddlCountry.Enabled = false;
+            txtPhone.Enabled = false;
+
+            this.btnContinue.Visible = false;
+            btnBack.Visible = true;
+            btnPay.Visible = true;
+            lblDetailsReview.Visible = true;
+
+
         }
 
         private TransactionsData FillTransactionsData()
@@ -192,10 +227,40 @@ namespace Coriunder
             data.ZipCode = txtZipCode.Text;
             data.CountryCode = ddlCountry.SelectedValue;
             data.Phone = txtPhone.Text;
-            data.Amount = 100;          //Hardcoded for the exam, the value must be transferred from Order details screen
-            data.Currency = "0";          //0 = ILS (Israel New Shekel)
+            data.Amount = 2.00m;          //Hardcoded for the exam, the value must be transferred from Order details screen
+            data.Currency = "ILS";          //0 = ILS (Israel New Shekel)
             data.PersonalHashKey = "7ZIQHB7YYN";
             return data;
+        }
+
+        protected void btnPay_Click(object sender, EventArgs e)
+        {
+            //if (string.IsNullOrEmpty(txtCardholderName.Text))
+            //{
+
+            //}
+
+            TransactionsData data = FillTransactionsData();
+            SilentPostCharge(data);
+        }
+
+        protected void btnBack_Click(object sender, EventArgs e)
+        {
+            txtCardholderName.Enabled = true;
+            txtEmail.Enabled = true;
+            txtCardNumber.Enabled = true;
+            ddlExpMonth.Enabled = true;
+            ddlExpYear.Enabled = true;
+            txtCvv.Enabled = true;
+            txtAddress.Enabled = true;
+            txtCity.Enabled = true;
+            txtZipCode.Enabled = true;
+            ddlCountry.Enabled = true;
+            txtPhone.Enabled = true;
+
+            this.btnContinue.Visible = true;
+            btnBack.Visible = false;
+            btnPay.Visible = false;
         }
     }
 }
