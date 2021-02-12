@@ -76,39 +76,43 @@ namespace Coriunder
             return ipAddress.ToString();
         }
 
-        private void SilentPostCharge(TransactionsData data)
+        private string BuildUrlStringToSend(TransactionsData data)
         {
-            //------------- building url string to send
-            String sendStr;
-            sendStr = "https://process.coriunder.cloud/member/remote_charge.asp?";
-            sendStr += "CompanyNum=" + HttpUtility.UrlEncode(data.CompanyNumber) + "&";
-            sendStr += "TransType=" + HttpUtility.UrlEncode(Convert.ToInt32(TransactionType.Debit).ToString()) + "&";
-            sendStr += "ClientIP=" + HttpUtility.UrlEncode(data.ClientIp) + "&";
-            sendStr += "CardNum=" + HttpUtility.UrlEncode(data.CardNumber) + "&";
-            sendStr += "ExpMonth=" + HttpUtility.UrlEncode(data.Month.ToString()) + "&";
-            sendStr += "ExpYear=" + HttpUtility.UrlEncode(data.Year.ToString()) + "&";
-            sendStr += "Member=" + HttpUtility.UrlEncode(data.CardHolderName.ToString()) + "&";
-            sendStr += "TypeCredit=" + HttpUtility.UrlEncode(Convert.ToInt32(TypeCredit.Debit).ToString()) + "&";
-            sendStr += "Payments=" + HttpUtility.UrlEncode("1") + "&";            // 1 - for regular transaction
+            string sendStr;
+            string remoteChargeUrl = WebConfigurationManager.AppSettings["RemoteChargeUrl"];
 
-            sendStr += "Amount=" + HttpUtility.UrlEncode(data.Amount.ToString()) + "&";
-            sendStr += "Currency=" + HttpUtility.UrlEncode(data.Currency.ToString()) + "&";
-            sendStr += "CVV2=" + HttpUtility.UrlEncode(data.Cvv.ToString()) + "&";
-            sendStr += "Email=" + HttpUtility.UrlEncode(data.Email) + "&";
-            sendStr += "PhoneNumber=" + HttpUtility.UrlEncode(data.Phone) + "&";
-                        
-            sendStr += "BillingAddress1=" + HttpUtility.UrlEncode(data.BillingAddress) + "&";
-            sendStr += "BillingCity=" + HttpUtility.UrlEncode(data.City) + "&";
-            sendStr += "BillingZipCode=" + HttpUtility.UrlEncode(data.ZipCode) + "&";
-            sendStr += "BillingCountry=" + HttpUtility.UrlEncode(data.CountryCode) + "&";
-
+            StringBuilder sb = new StringBuilder(remoteChargeUrl);
+            sb.Append("CompanyNum=" + HttpUtility.UrlEncode(data.CompanyNumber) + "&");
+            sb.Append("TransType=" + HttpUtility.UrlEncode(Convert.ToInt32(TransactionType.Debit).ToString()) + "&");
+            sb.Append("ClientIP=" + HttpUtility.UrlEncode(data.ClientIp) + "&");
+            sb.Append("CardNum=" + HttpUtility.UrlEncode(data.CardNumber) + "&");
+            sb.Append("ExpMonth=" + HttpUtility.UrlEncode(data.Month.ToString()) + "&");
+            sb.Append("ExpYear=" + HttpUtility.UrlEncode(data.Year.ToString()) + "&");
+            sb.Append("Member=" + HttpUtility.UrlEncode(data.CardHolderName.ToString()) + "&");
+            sb.Append("TypeCredit=" + HttpUtility.UrlEncode(Convert.ToInt32(TypeCredit.Debit).ToString()) + "&");
+            sb.Append("Payments=" + HttpUtility.UrlEncode("1") + "&");         // 1 - for regular transaction
+            sb.Append("Amount=" + HttpUtility.UrlEncode(data.Amount.ToString()) + "&");
+            sb.Append("Currency=" + HttpUtility.UrlEncode(data.Currency.ToString()) + "&");
+            sb.Append("CVV2=" + HttpUtility.UrlEncode(data.Cvv.ToString()) + "&");
+            sb.Append("Email=" + HttpUtility.UrlEncode(data.Email) + "&");
+            sb.Append("PhoneNumber=" + HttpUtility.UrlEncode(data.Phone) + "&");
+            sb.Append("BillingAddress1=" + HttpUtility.UrlEncode(data.BillingAddress) + "&");
+            sb.Append("BillingCity=" + HttpUtility.UrlEncode(data.City) + "&");
+            sb.Append("BillingZipCode=" + HttpUtility.UrlEncode(data.ZipCode) + "&");
+            sb.Append("BillingCountry=" + HttpUtility.UrlEncode(data.CountryCode) + "&");
             //Signature 
             string signature = data.CompanyNumber + TransactionType.ChargeCC.ToString() + ((int)TypeCredit.Refund).ToString() +
                                data.Amount.ToString() + data.Currency.ToString() + data.CardNumber + data.RefTransID + data.PersonalHashKey;
             string shaSignature = Signature.GenerateSHA256(signature);
             string encodedTo64 = Signature.EncodeTo64(shaSignature);
-            sendStr += "Signature=" + HttpUtility.UrlEncode(encodedTo64);
+            sb.Append("Signature=" + HttpUtility.UrlEncode(encodedTo64));
+            sendStr = sb.ToString();
+            return sendStr;
+        }
 
+        private void SilentPostCharge(TransactionsData data)
+        {
+            string sendStr = BuildUrlStringToSend(data);
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             HttpWebRequest webReq = (HttpWebRequest)WebRequest.Create(sendStr);
             webReq.Method = "GET";
@@ -152,6 +156,12 @@ namespace Coriunder
 
         protected void btnContinue_Click(object sender, EventArgs e)
         {
+            if (string.IsNullOrEmpty(txtCardNumber.Text) || string.IsNullOrEmpty(txtPhone.Text) ||
+                string.IsNullOrEmpty(txtCardholderName.Text))
+            {
+                return;
+            }
+
             txtCardholderName.Enabled = false;
             txtEmail.Enabled = false;
             txtCardNumber.Enabled = false;
@@ -181,7 +191,7 @@ namespace Coriunder
             data.CardHolderName = txtCardholderName.Text;
             data.Email = txtEmail.Text;
             data.CardNumber = txtCardNumber.Text;
-            data.Month = Convert.ToInt32(ddlExpMonth.SelectedValue);
+            data.Month = (ddlExpMonth.SelectedValue != "0") ?  Convert.ToInt32(ddlExpMonth.SelectedValue) : 1;
             data.Year = this.ddlExpYear.SelectedValue;
             data.Cvv = txtCvv.Text;
             data.BillingAddress = txtAddress.Text;
