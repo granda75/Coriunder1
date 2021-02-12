@@ -37,5 +37,9 @@ namespace Coriunder.Models
 
         public string CompanyNumber { get; set; }
 
+        public string ClientIp { get; set; }
+
+        public string RefTransID { get; set; }
+       
     }
 }
